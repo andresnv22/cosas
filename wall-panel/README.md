@@ -55,6 +55,17 @@ calendario que querés mostrar → "Integrar calendario" → copiá la
 "Dirección pública en formato iCal" (tenés que hacer el calendario público,
 o al menos esa dirección secreta — Google la genera para vos).
 
+Validá que todo lo que pusiste en `.env` funciona de verdad, antes de
+levantar el server:
+
+```bash
+python server/verify_setup.py
+```
+
+Te lee el calendario, te muestra los eventos de hoy, y confirma que el
+clima responde — así si algo está mal lo sabés en 2 segundos, no mirando
+un panel en blanco.
+
 ```bash
 uvicorn server.app:app --host 0.0.0.0 --port 8000
 ```

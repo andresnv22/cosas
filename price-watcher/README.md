@@ -52,6 +52,15 @@ cp .env.example .env
 # editá .env y pegá tu TELEGRAM_BOT_TOKEN
 ```
 
+Antes de seguir, validá que el token esté bien (evita el clásico "¿por qué no contesta?"):
+
+```bash
+python scripts/verify_setup.py
+```
+
+Te dice si el token es válido, y una vez que tengas `TELEGRAM_CHAT_ID` (paso
+siguiente) también te manda un mensaje de prueba real.
+
 ### 3. Correr el bot y conseguir tu chat_id
 
 ```bash

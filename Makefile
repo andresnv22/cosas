@@ -1,16 +1,18 @@
 # Atajos para no tener que acordarte de los comandos largos.
 # `make help` lista todo.
 
-.PHONY: help setup-price-watcher setup-wall-panel test test-firmware up down logs
+.PHONY: help setup-price-watcher setup-wall-panel verify-price-watcher verify-wall-panel test test-firmware up down logs
 
 help:
-	@echo "make setup-price-watcher   - venv + deps + copia .env.example -> .env"
-	@echo "make setup-wall-panel      - venv + deps + copia .env.example -> .env"
-	@echo "make test                  - corre los tests de price-watcher"
-	@echo "make test-firmware         - compila el firmware del ESP32 (requiere PlatformIO)"
-	@echo "make up                    - levanta todo con Docker Compose (requiere .env ya configurados)"
-	@echo "make down                  - baja los contenedores"
-	@echo "make logs                  - sigue los logs de los contenedores"
+	@echo "make setup-price-watcher    - venv + deps + copia .env.example -> .env"
+	@echo "make setup-wall-panel       - venv + deps + copia .env.example -> .env"
+	@echo "make verify-price-watcher   - valida tu .env (token de Telegram) contra la API real"
+	@echo "make verify-wall-panel      - valida tu .env (calendario/clima) contra las APIs reales"
+	@echo "make test                   - corre los tests de price-watcher"
+	@echo "make test-firmware          - compila el firmware del ESP32 (requiere PlatformIO)"
+	@echo "make up                     - levanta todo con Docker Compose (requiere .env ya configurados)"
+	@echo "make down                   - baja los contenedores"
+	@echo "make logs                   - sigue los logs de los contenedores"
 
 setup-price-watcher:
 	cd price-watcher && python3 -m venv .venv && \
@@ -23,6 +25,12 @@ setup-wall-panel:
 	.venv/bin/pip install -q -r requirements.txt && \
 	test -f .env || cp .env.example .env
 	@echo "Listo. Editá wall-panel/server/.env con tu CALENDAR_ICS_URL y PANEL_TOKEN."
+
+verify-price-watcher:
+	cd price-watcher && .venv/bin/python scripts/verify_setup.py
+
+verify-wall-panel:
+	wall-panel/server/.venv/bin/python wall-panel/server/verify_setup.py
 
 test:
 	cd price-watcher && python3 -m pytest tests/ -v
