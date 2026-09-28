@@ -1,0 +1,19 @@
+// Copiá este archivo a config.h (config.h está en .gitignore — nunca subas
+// tu WiFi ni tu token al repo) y completá tus datos.
+
+#pragma once
+
+#define WIFI_SSID       "tu_red"
+#define WIFI_PASSWORD   "tu_clave"
+
+// URL completa del endpoint del server (server/app.py). Si el server corre
+// en tu PC, usá la IP local de tu PC, no "localhost" (el ESP32 es otro
+// dispositivo en la red). Ejemplo: "http://192.168.1.50:8000/panel.json"
+#define PANEL_API_URL   "http://192.168.1.XX:8000/panel.json"
+
+// El mismo valor que pusiste en server/.env como PANEL_TOKEN
+#define PANEL_TOKEN     ""
+
+// Cada cuánto se despierta a actualizar (minutos). 15-30 min es un buen
+// balance: la info no queda vieja y la batería dura meses igual.
+#define REFRESH_MINUTES 20

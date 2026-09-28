@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+
+# Secretos locales
+.env
+price-watcher/.env
+
+# La base de datos de precios SÍ se versiona (la actualiza el workflow de
+# GitHub Actions para persistir el historial entre corridas). No la ignores.
+
+# ESP32 / PlatformIO
+wall-panel/firmware/**/.pio/
+wall-panel/firmware/**/config.h
+
+# Server del panel
+wall-panel/server/.venv/
+wall-panel/server/__pycache__/
+wall-panel/server/.env
+
+# Editor / OS
+.DS_Store
+*.swp
