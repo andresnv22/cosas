@@ -1,0 +1,31 @@
+name: Compilar firmware del panel
+
+on:
+  push:
+    paths:
+      - "wall-panel/firmware/**"
+      - ".github/workflows/build-firmware.yml"
+  pull_request:
+    paths:
+      - "wall-panel/firmware/**"
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar PlatformIO
+        run: pip install -U platformio
+
+      - name: Config de prueba (el real nunca se commitea)
+        run: cp wall-panel/firmware/wall_panel/src/config.h.example wall-panel/firmware/wall_panel/src/config.h
+
+      - name: Compilar
+        working-directory: wall-panel/firmware/wall_panel
+        run: pio run

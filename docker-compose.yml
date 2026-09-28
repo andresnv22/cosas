@@ -1,0 +1,39 @@
+services:
+  price-watcher-bot:
+    build: ./price-watcher
+    restart: unless-stopped
+    env_file:
+      - ./price-watcher/.env
+    volumes:
+      # La base SQLite vive afuera del contenedor: sobrevive a un rebuild.
+      - ./price-watcher/data:/app/data
+    environment:
+      - PRICEWATCHER_DB=/app/data/pricewatcher.db
+
+  price-watcher-checker:
+    build: ./price-watcher
+    restart: unless-stopped
+    env_file:
+      - ./price-watcher/.env
+    volumes:
+      - ./price-watcher/data:/app/data
+    environment:
+      - PRICEWATCHER_DB=/app/data/pricewatcher.db
+    # Alternativa 100% self-hosted al cron de GitHub Actions: si preferís no
+    # depender de que el repo esté en GitHub, este contenedor hace lo mismo
+    # localmente, corriendo el chequeo cada 6 horas para siempre.
+    entrypoint: ["sh", "-c"]
+    command:
+      - "while true; do python scripts/run_check.py; sleep 21600; done"
+
+  wall-panel-server:
+    build: ./wall-panel/server
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./wall-panel/server/.env
+    volumes:
+      - ./wall-panel/server/data:/app/server/data
+    environment:
+      - TASKS_PATH=/app/server/data/tasks.json

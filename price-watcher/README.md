@@ -29,6 +29,10 @@ Agregar una tienda nueva = un archivo en `pricewatcher/scrapers/` que
 implemente `matches(url)` y `fetch(url)`. Nada más del sistema necesita
 tocarse — mirá `mercadolibre.py` o `steam.py` como plantilla.
 
+> 🐳 Si preferís Docker: completá el `.env` (pasos de abajo) y desde la raíz
+> del repo corré `docker compose up -d --build` — levanta el bot y el
+> chequeo periódico sin tocar Python local. Detalle en el README raíz.
+
 ## Instalación
 
 ### 1. Crear el bot de Telegram

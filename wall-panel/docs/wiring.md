@@ -1,7 +1,7 @@
 # Conexionado
 
 Pantalla e-ink 2.9" (SSD1680) ↔ ESP32 DevKit. Los pines de datos (`CS`,
-`DC`, `RST`, `BUSY`) son configurables en `firmware/wall_panel/wall_panel.ino`
+`DC`, `RST`, `BUSY`) son configurables en `firmware/wall_panel/src/wall_panel.ino`
 (constantes `EPD_CS`, `EPD_DC`, `EPD_RST`, `EPD_BUSY`) — si cableás distinto,
 solo cambiá esos números, no hace falta tocar el resto del código.
 

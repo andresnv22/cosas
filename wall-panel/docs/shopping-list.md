@@ -14,7 +14,7 @@
 
 - Pedí explícitamente el driver **SSD1680** — es el que soporta el firmware
   tal cual está escrito. Si tu módulo trae otro driver (IL3897, UC8151,
-  etc.), hay que cambiar la clase de GxEPD2 en `wall_panel.ino` (la
+  etc.), hay que cambiar la clase de GxEPD2 en `firmware/wall_panel/src/wall_panel.ino` (la
   librería lista todos los modelos soportados en su `GxEPD2_display_selection.h`
   de ejemplo — buscá el que coincida con la etiqueta de tu módulo).
 - Si preferís una pantalla más grande (4.2"), el código funciona igual —

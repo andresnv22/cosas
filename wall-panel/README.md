@@ -30,6 +30,11 @@ ESP32 dibuja en la pantalla e-ink y vuelve a deep sleep
 - [`docs/shopping-list.md`](docs/shopping-list.md) — qué comprar y dónde (~$20-23)
 - [`docs/wiring.md`](docs/wiring.md) — diagrama de conexión pin por pin
 
+> 🐳 Si preferís Docker: completá `server/.env` (pasos de abajo) y desde la
+> raíz del repo corré `docker compose up -d --build wall-panel-server` —
+> queda escuchando en `http://localhost:8000/panel.json`. Detalle en el
+> README raíz.
+
 ## 1. Levantar el servidor
 
 Podés correrlo en tu PC (mientras esté prendida) o en cualquier rincón
@@ -78,13 +83,30 @@ puesto así que después de armado.
 
 ## 3. Flashear el ESP32
 
-1. Arduino IDE → Boards Manager → instalá soporte para ESP32
-2. Sketch → Include Library → instalá **GxEPD2** y **ArduinoJson** (v7)
-3. `cd firmware/wall_panel && cp config.h.example config.h`
-4. Editá `config.h`: tu WiFi, y `PANEL_API_URL` apuntando a la IP local de
-   tu PC (no "localhost" — el ESP32 es otro dispositivo en la red), con el
-   mismo `PANEL_TOKEN` que pusiste en `server/.env`
-5. Conectá el ESP32 por USB, elegí la placa y el puerto, y subí el sketch
+Se usa **PlatformIO** (no Arduino IDE): instala las librerías exactas
+automáticamente, y este firmware ya está **compilado y verificado** con este
+método — `pio run` da `[SUCCESS]` con RAM al 16% y Flash al 73%, así que si
+te da un error distinto, es de tu configuración (cableado/librerías locales),
+no del código.
+
+```bash
+pip install -U platformio
+
+cd firmware/wall_panel
+cp src/config.h.example src/config.h
+# editá src/config.h: tu WiFi, y PANEL_API_URL apuntando a la IP local de tu
+# PC (no "localhost" — el ESP32 es otro dispositivo en la red), con el mismo
+# PANEL_TOKEN que pusiste en server/.env
+
+pio run                       # compila (probalo antes de tocar hardware)
+pio run --target upload       # compila y flashea por USB
+pio device monitor            # ver los logs (115200 baudios)
+```
+
+Si preferís Arduino IDE igual: Boards Manager → soporte ESP32, después
+Library Manager → instalá **GxEPD2** (1.6.x), **ArduinoJson** (7.x),
+**Adafruit GFX Library** y **Adafruit BusIO** — son las versiones exactas
+que `platformio.ini` fija y con las que se probó.
 
 Abrí el monitor serie (115200 baudios) para ver los logs mientras conecta
 al WiFi y pide los datos — es la forma más rápida de diagnosticar si algo
@@ -103,7 +125,7 @@ falla antes de pasar a batería.
 ## Personalizar qué se muestra
 
 Todo el layout se dibuja en `drawPanel()` dentro de
-`firmware/wall_panel/wall_panel.ino`. Es dibujo directo con las funciones de
+`firmware/wall_panel/src/wall_panel.ino`. Es dibujo directo con las funciones de
 `Adafruit_GFX` (`setCursor`, `print`, `drawFastHLine`...) — no hay nada
 mágico, es la forma más simple de tener control total del layout en una
 pantalla tan chica.
