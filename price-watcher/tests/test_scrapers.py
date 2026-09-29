@@ -50,7 +50,6 @@ def test_fake_discount_is_not_alerted(tmp_path):
     product = db.add_product(
         url="https://store.steampowered.com/app/1/test",
         store="steam",
-        chat_id="123",
         db_path=db_path,
     )
 
@@ -71,7 +70,6 @@ def test_real_new_low_is_alerted(tmp_path):
     product = db.add_product(
         url="https://store.steampowered.com/app/2/test",
         store="steam",
-        chat_id="123",
         db_path=db_path,
     )
 

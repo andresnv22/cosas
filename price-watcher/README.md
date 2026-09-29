@@ -1,18 +1,18 @@
 # Vigilante de precios
 
-Bot de Telegram que sigue productos de MercadoLibre y Steam, guarda el
-historial de precios, y te avisa **solo cuando la baja es real** — no cuando
-la tienda "sube para bajar" (comparamos contra el mínimo de los últimos 90
-días, no contra el precio de ayer).
+Sigue productos de MercadoLibre y Steam, guarda el historial de precios, y
+te avisa **por email, solo cuando la baja es real** — no cuando la tienda
+"sube para bajar" (comparamos contra el mínimo de los últimos 90 días, no
+contra el precio de ayer).
 
-Corre gratis: el bot vive donde vos lo prendas (tu PC, un rincón de un
-servidor), y el chequeo periódico corre en **GitHub Actions** cada 6 horas,
-sin que tengas que tener nada prendido.
+Vos agregás/sacás productos con un comando en tu PC (`pricewatcher.cli`);
+el chequeo periódico corre solo en **GitHub Actions** cada 6 horas, sin que
+tengas que tener nada prendido.
 
 ## Cómo funciona
 
 ```
-Vos (Telegram) ──/watch url──► bot.py ──► guarda producto en SQLite
+Vos (tu PC) ──cli.py watch <url>──► guarda producto en SQLite
                                               │
 GitHub Actions (cron, cada 6h) ──────────────┤
                                               ▼
@@ -22,7 +22,7 @@ GitHub Actions (cron, cada 6h) ──────────────┤
                                               │
                                     analysis.py: ¿esto es baja real?
                                               │
-                                   sí ──► notify.py (Telegram + gráfico)
+                                   sí ──► notify.py (email + gráfico)
 ```
 
 Agregar una tienda nueva = un archivo en `pricewatcher/scrapers/` que
@@ -30,15 +30,22 @@ implemente `matches(url)` y `fetch(url)`. Nada más del sistema necesita
 tocarse — mirá `mercadolibre.py` o `steam.py` como plantilla.
 
 > 🐳 Si preferís Docker: completá el `.env` (pasos de abajo) y desde la raíz
-> del repo corré `docker compose up -d --build` — levanta el bot y el
-> chequeo periódico sin tocar Python local. Detalle en el README raíz.
+> del repo corré `docker compose up -d --build` — levanta el chequeo
+> periódico sin tocar Python local. Detalle en el README raíz.
 
 ## Instalación
 
-### 1. Crear el bot de Telegram
+### 1. Conseguir credenciales SMTP
 
-Hablá con [@BotFather](https://t.me/BotFather) en Telegram → `/newbot` →
-te da un token.
+La forma más simple es con Gmail:
+
+1. Activá verificación en 2 pasos en tu cuenta (si no la tenés)
+2. Andá a [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)
+   y generá una "contraseña de aplicación" — **no** es tu contraseña normal,
+   es una cadena de 16 caracteres solo para esto
+
+Si usás otro proveedor de mail, necesitás su host/puerto SMTP (Outlook:
+`smtp.office365.com:587`, tu propio dominio: preguntale a quien lo administra).
 
 ### 2. Configurar
 
@@ -49,39 +56,38 @@ source .venv/bin/activate        # en Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 
 cp .env.example .env
-# editá .env y pegá tu TELEGRAM_BOT_TOKEN
+# editá .env: SMTP_USER (tu mail), SMTP_PASSWORD (la contraseña de app), EMAIL_TO
 ```
 
-Antes de seguir, validá que el token esté bien (evita el clásico "¿por qué no contesta?"):
+Validá que quedó bien configurado — esto te manda un mail de prueba real:
 
 ```bash
 python scripts/verify_setup.py
 ```
 
-Te dice si el token es válido, y una vez que tengas `TELEGRAM_CHAT_ID` (paso
-siguiente) también te manda un mensaje de prueba real.
+Si algo falla te dice exactamente qué (usuario/contraseña rechazados, host
+inalcanzable, etc.) en vez de que te enteres cuando una alerta real no llegue.
 
-### 3. Correr el bot y conseguir tu chat_id
+### 3. Seguir un producto
 
 ```bash
-python -m pricewatcher.bot
-```
-
-Andá a Telegram, hablale a tu bot, mandale `/start`. Te va a devolver tu
-`chat_id` — copialo a `.env` en `TELEGRAM_CHAT_ID` (lo necesita el cron, que
-no tiene una conversación activa para saber a quién escribirle).
-
-### 4. Seguir un producto
-
-```
-/watch https://articulo.mercadolibre.com.co/MCO-123456-algo
-/watch https://store.steampowered.com/app/570/Dota_2/ 50000
+python -m pricewatcher.cli watch https://articulo.mercadolibre.com.co/MCO-123456-algo
+python -m pricewatcher.cli watch https://store.steampowered.com/app/570/Dota_2/ 50000
 ```
 
 El segundo ejemplo tiene precio objetivo: avisa apenas llegue a $50.000,
 sin importar el umbral de baja general.
 
-Comandos: `/list`, `/history <id>`, `/unwatch <id>`.
+Otros comandos:
+
+```bash
+python -m pricewatcher.cli list              # ver qué estás siguiendo
+python -m pricewatcher.cli history <id>       # guarda el gráfico como PNG
+python -m pricewatcher.cli unwatch <id>       # dejar de seguir
+```
+
+(O con `make`: `make watch URL=<url>`, `make list-products` — ver el
+`Makefile` en la raíz.)
 
 ## Chequeo automático con GitHub Actions (gratis, sin servidor)
 
@@ -89,9 +95,13 @@ El workflow ya está en `.github/workflows/check-prices.yml`, corre cada 6
 horas. Solo falta:
 
 1. En GitHub → tu repo → **Settings → Secrets and variables → Actions**,
-   creá dos *repository secrets*:
-   - `TELEGRAM_BOT_TOKEN`
-   - `TELEGRAM_CHAT_ID`
+   creá estos *repository secrets*:
+   - `SMTP_HOST` (ej: `smtp.gmail.com`)
+   - `SMTP_PORT` (ej: `587`)
+   - `SMTP_USER`
+   - `SMTP_PASSWORD`
+   - `EMAIL_FROM` (puede ser igual a `SMTP_USER`)
+   - `EMAIL_TO`
 2. Pusheá — el workflow también se puede disparar a mano desde la pestaña
    **Actions** (`workflow_dispatch`) para probarlo sin esperar 6 horas.
 3. El workflow commitea `data/pricewatcher.db` de vuelta al repo después de
@@ -103,6 +113,11 @@ nada sensible, pero tenelo en cuenta). Si te importa, poné el repo en
 privado o cambiá el workflow para guardar la base en otro lado (un gist
 privado, un bucket S3 gratis, etc.).
 
+Para agregar/sacar productos que sigue el chequeo automático, corré el CLI
+localmente (apunta a la misma base que después se sube al repo) y pusheá el
+cambio — o simplemente corré el CLI en tu PC con `PRICEWATCHER_DB` apuntando
+a una copia del `data/pricewatcher.db` que bajaste del repo.
+
 ## Correr los tests
 
 ```bash
@@ -110,9 +125,9 @@ pip install pytest
 pytest tests/ -v
 ```
 
-Los tests no pegan a internet: prueban el parsing de URLs de cada tienda y
-la lógica de "¿esta baja es un descuento real o maquillaje?" con datos
-simulados.
+14 tests, ninguno pega a internet: parsing de URLs de cada tienda, la
+lógica de "¿esta baja es un descuento real o maquillaje?", y el armado del
+mail (asunto/cuerpo, múltiples destinatarios) con datos simulados.
 
 ## Estructura
 
@@ -127,10 +142,12 @@ price-watcher/
 │   │   └── steam.py
 │   ├── analysis.py      # ¿vale la pena avisar? (detección de descuento falso)
 │   ├── charts.py         # gráfico de precio con matplotlib
-│   ├── notify.py         # envío por Telegram
+│   ├── notify.py         # envío por email (SMTP, sin dependencias nuevas)
 │   ├── checker.py        # recorre todos los productos (lo llama el cron)
-│   └── bot.py             # bot interactivo (/watch, /list, /history...)
-├── scripts/run_check.py  # entrypoint del cron
+│   └── cli.py              # watch / list / unwatch / history, para uso local
+├── scripts/
+│   ├── run_check.py       # entrypoint del cron
+│   └── verify_setup.py    # valida el .env contra el servidor SMTP real
 └── tests/
 ```
 
@@ -144,3 +161,7 @@ price-watcher/
   públicas estables, así que son los más confiables.
 - La detección de "descuento falso" necesita historial: recién es útil
   después de que el producto lleva algunas semanas siendo chequeado.
+- Sin comandos remotos: como las alertas van por email (no hay chat que
+  conteste), agregar/sacar productos se hace corriendo el CLI en tu PC, no
+  desde el celular. Si más adelante querés eso, un bot de Discord con
+  comandos es la forma más simple de sumarlo sin tocar el resto del sistema.

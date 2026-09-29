@@ -1,6 +1,6 @@
 """Tareas del día: lo más simple que puede funcionar. Un archivo JSON que
 editás a mano o con el par de funciones de acá. Si más adelante querés
-cargarlas desde el bot de Telegram del price-watcher (u otro), este módulo
+cargarlas desde otro sistema (un CLI, un webhook, lo que sea), este módulo
 es el único que hay que tocar — el resto del panel no sabe de dónde salen.
 """
 

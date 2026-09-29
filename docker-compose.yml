@@ -1,15 +1,9 @@
 services:
-  price-watcher-bot:
-    build: ./price-watcher
-    restart: unless-stopped
-    env_file:
-      - ./price-watcher/.env
-    volumes:
-      # La base SQLite vive afuera del contenedor: sobrevive a un rebuild.
-      - ./price-watcher/data:/app/data
-    environment:
-      - PRICEWATCHER_DB=/app/data/pricewatcher.db
-
+  # No hay servicio "bot": las alertas van por email, no hay nada
+  # interactivo que mantener corriendo. Agregás/sacás productos con
+  # `python -m pricewatcher.cli watch|list|unwatch|history` en tu PC,
+  # o con `docker compose run --rm price-watcher-checker python -m
+  # pricewatcher.cli watch <url>` si preferís no instalar Python local.
   price-watcher-checker:
     build: ./price-watcher
     restart: unless-stopped

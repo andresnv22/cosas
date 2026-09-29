@@ -12,7 +12,6 @@ from dataclasses import dataclass
 
 from . import analysis, charts, db, notify
 from .scrapers import ScraperError, find_scraper_for
-from .textutil import escape_markdown
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("checker")
@@ -26,23 +25,34 @@ class CheckResult:
     detail: str
 
 
-def _format_alert(product: db.Product, verdict: analysis.PriceVerdict) -> str:
-    title = escape_markdown(product.title or product.url)
-    lines = [f"🔔 *{title}*", ""]
+def _format_alert(product: db.Product, verdict: analysis.PriceVerdict) -> tuple[str, str]:
+    """Devuelve (asunto, cuerpo) del mail. Texto plano — notify.py se encarga
+    de escapar lo que haga falta para la versión HTML."""
+    title = product.title or product.url
+
+    subject_parts = ["🔔"]
+    if verdict.is_all_time_low:
+        subject_parts.append("Mínimo histórico:")
+    else:
+        subject_parts.append("Bajó de precio:")
+    subject_parts.append(title[:60])
+    subject = " ".join(subject_parts)
+
+    lines = [title, ""]
     if verdict.is_all_time_low:
         lines.append("📉 Nuevo mínimo histórico")
     if verdict.previous_price:
         lines.append(f"Antes: ${verdict.previous_price:,.0f}")
-    lines.append(f"Ahora: *${verdict.current_price:,.0f}*")
+    lines.append(f"Ahora: ${verdict.current_price:,.0f}")
     if verdict.drop_percent:
         lines.append(f"Bajó {verdict.drop_percent:.1f}%")
     lines.append("")
     lines.append(verdict.reason)
     lines.append("")
-    # Las URLs de MercadoLibre suelen terminar en "-_JM" y variantes: el
-    # guion bajo también hay que escaparlo o rompe el parser de Markdown.
-    lines.append(escape_markdown(product.url))
-    return "\n".join(lines)
+    lines.append(product.url)
+    body = "\n".join(lines)
+
+    return subject, body
 
 
 def check_product(product: db.Product) -> CheckResult:
@@ -72,22 +82,19 @@ def check_product(product: db.Product) -> CheckResult:
 
     alerted = False
     if verdict.should_alert:
-        text = _format_alert(product, verdict)
+        subject, body = _format_alert(product, verdict)
         try:
             history = db.price_history(product.id)
-            if len(history) >= 2:
-                chart_bytes = charts.price_history_chart(product)
-                notify.send_photo(product.chat_id, chart_bytes, caption=text)
-            else:
-                notify.send_message(product.chat_id, text)
+            chart_bytes = charts.price_history_chart(product) if len(history) >= 2 else None
+            notify.send_alert(subject, body, chart_bytes)
             alerted = True
         except Exception:  # noqa: BLE001 - el gráfico falló, probamos solo texto
-            log.exception("No se pudo mandar el gráfico del producto %s, pruebo solo texto", product.id)
+            log.exception("No se pudo mandar el mail con gráfico del producto %s, pruebo sin gráfico", product.id)
             try:
-                notify.send_message(product.chat_id, text)
+                notify.send_alert(subject, body, chart_png=None)
                 alerted = True
-            except Exception:  # noqa: BLE001 - Telegram caído: no debe tumbar el resto del batch
-                log.exception("Tampoco se pudo mandar el mensaje de texto del producto %s", product.id)
+            except Exception:  # noqa: BLE001 - SMTP caído: no debe tumbar el resto del batch
+                log.exception("Tampoco se pudo mandar el mail del producto %s", product.id)
 
     return CheckResult(product.id, ok=True, alerted=alerted, detail=verdict.reason)
 

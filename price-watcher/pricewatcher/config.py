@@ -19,12 +19,19 @@ except ImportError:
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# --- Telegram ---
-TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
-# Chat al que se mandan las alertas automáticas (el cron no puede "responder"
-# a nadie, así que necesita saber a quién escribirle). Se obtiene la primera
-# vez que le hablás al bot con /start.
-TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
+# --- Email (SMTP) ---
+# Con Gmail: activá verificación en 2 pasos y generá una "contraseña de
+# aplicación" en myaccount.google.com/apppasswords — la contraseña normal
+# de tu cuenta NO funciona para SMTP si tenés 2FA activado (y si no lo
+# tenés, activalo).
+SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.gmail.com")
+SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
+SMTP_USER = os.environ.get("SMTP_USER", "")
+SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
+# De dónde sale el mail. Si no lo seteás, usa SMTP_USER (lo normal).
+EMAIL_FROM = os.environ.get("EMAIL_FROM", "") or SMTP_USER
+# A quién le llega. Podés poner varias direcciones separadas por coma.
+EMAIL_TO = os.environ.get("EMAIL_TO", "")
 
 # --- Base de datos ---
 DB_PATH = Path(os.environ.get("PRICEWATCHER_DB", BASE_DIR / "data" / "pricewatcher.db"))

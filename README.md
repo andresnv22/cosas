@@ -4,9 +4,9 @@ Dos proyectos, cada uno en su carpeta, pensados para armarse rápido y quedar fu
 
 ## [`price-watcher/`](price-watcher/) — Vigilante de precios
 
-Bot de Telegram que sigue precios en MercadoLibre y Steam, guarda el historial,
-y te avisa cuando algo baja de verdad (no cuando "suben para bajar"). Corre
-gratis con GitHub Actions cada 6 horas — no necesita servidor propio.
+Sigue precios en MercadoLibre y Steam, guarda el historial, y te avisa
+**por email** cuando algo baja de verdad (no cuando "suben para bajar").
+Corre gratis con GitHub Actions cada 6 horas — no necesita servidor propio.
 
 **Empezar:** `cd price-watcher && cat README.md`
 
@@ -23,17 +23,21 @@ servidorcito le manda los datos ya armados.
 ## Arranque rápido con Docker
 
 Una vez que tengas los `.env` completados en cada carpeta (mirá el README de
-cada proyecto para conseguir los valores: token de Telegram, link de Google
+cada proyecto para conseguir los valores: credenciales SMTP, link de Google
 Calendar, etc.), todo se levanta con:
 
 ```bash
 docker compose up -d --build
 ```
 
-Esto prende tres contenedores: el bot de Telegram, un chequeo de precios en
-loop cada 6h (alternativa 100% self-hosted al cron de GitHub Actions), y el
-server del panel en `http://localhost:8000/panel.json`. `docker compose logs -f`
-para ver qué están haciendo, `docker compose down` para bajarlos.
+Esto prende dos contenedores: un chequeo de precios en loop cada 6h
+(alternativa 100% self-hosted al cron de GitHub Actions) y el server del
+panel en `http://localhost:8000/panel.json`. `docker compose logs -f` para
+ver qué están haciendo, `docker compose down` para bajarlos.
+
+Para agregar productos al vigilante de precios: `make watch URL=<url>` (o
+`docker compose run --rm price-watcher-checker python -m pricewatcher.cli
+watch <url>` si no tenés Python local).
 
 También hay un `Makefile` con atajos (`make help` los lista) para no pelear
 con los comandos largos de venv/pip/pytest.

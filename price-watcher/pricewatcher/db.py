@@ -19,7 +19,6 @@ CREATE TABLE IF NOT EXISTS products (
     url           TEXT NOT NULL UNIQUE,
     store         TEXT NOT NULL,          -- 'mercadolibre' | 'steam'
     title         TEXT,
-    chat_id       TEXT NOT NULL,          -- quién lo está siguiendo
     target_price  REAL,                   -- opcional: avisar solo por debajo de esto
     active        INTEGER NOT NULL DEFAULT 1,
     created_at    TEXT NOT NULL
@@ -45,7 +44,6 @@ class Product:
     url: str
     store: str
     title: Optional[str]
-    chat_id: str
     target_price: Optional[float]
     active: bool
     created_at: str
@@ -65,7 +63,6 @@ def _row_to_product(row: sqlite3.Row) -> Product:
         url=row["url"],
         store=row["store"],
         title=row["title"],
-        chat_id=row["chat_id"],
         target_price=row["target_price"],
         active=bool(row["active"]),
         created_at=row["created_at"],
@@ -94,7 +91,6 @@ def init_db(db_path: Path | None = None) -> None:
 def add_product(
     url: str,
     store: str,
-    chat_id: str,
     title: str | None = None,
     target_price: float | None = None,
     db_path: Path | None = None,
@@ -102,11 +98,11 @@ def add_product(
     with connect(db_path) as conn:
         conn.execute(
             """
-            INSERT INTO products (url, store, title, chat_id, target_price, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-            ON CONFLICT(url) DO UPDATE SET active = 1, chat_id = excluded.chat_id
+            INSERT INTO products (url, store, title, target_price, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(url) DO UPDATE SET active = 1
             """,
-            (url, store, title, chat_id, target_price, datetime.utcnow().isoformat()),
+            (url, store, title, target_price, datetime.utcnow().isoformat()),
         )
         # No confiamos en cur.lastrowid: en la rama ON CONFLICT DO UPDATE su
         # valor es None (no hubo INSERT nuevo), así que buscamos por la
@@ -115,17 +111,13 @@ def add_product(
         return _row_to_product(row)
 
 
-def list_products(chat_id: str | None = None, active_only: bool = True, db_path: Path | None = None) -> list[Product]:
+def list_products(active_only: bool = True, db_path: Path | None = None) -> list[Product]:
     query = "SELECT * FROM products WHERE 1=1"
-    params: list = []
-    if chat_id is not None:
-        query += " AND chat_id = ?"
-        params.append(chat_id)
     if active_only:
         query += " AND active = 1"
     query += " ORDER BY created_at DESC"
     with connect(db_path) as conn:
-        rows = conn.execute(query, params).fetchall()
+        rows = conn.execute(query).fetchall()
         return [_row_to_product(r) for r in rows]
 
 
@@ -135,14 +127,9 @@ def get_product(product_id: int, db_path: Path | None = None) -> Optional[Produc
         return _row_to_product(row) if row else None
 
 
-def deactivate_product(product_id: int, chat_id: str, db_path: Path | None = None) -> bool:
-    """Desactiva solo si el producto le pertenece a ese chat (evita que alguien
-    borre el seguimiento de otro si el bot se comparte)."""
+def deactivate_product(product_id: int, db_path: Path | None = None) -> bool:
     with connect(db_path) as conn:
-        cur = conn.execute(
-            "UPDATE products SET active = 0 WHERE id = ? AND chat_id = ?",
-            (product_id, chat_id),
-        )
+        cur = conn.execute("UPDATE products SET active = 0 WHERE id = ?", (product_id,))
         return cur.rowcount > 0
 
 
