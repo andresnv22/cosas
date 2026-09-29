@@ -10,10 +10,10 @@ on:
       accion:
         description: "Qué hacer"
         type: choice
-        options: [seguir, dejar_de_seguir, listar]
+        options: [seguir, consultar, dejar_de_seguir, listar]
         default: seguir
       url_o_id:
-        description: "Link del producto (para seguir) o su ID (para dejar de seguir)"
+        description: "Link del producto (seguir / consultar) o su ID (dejar de seguir)"
         required: false
         default: ""
       precio_objetivo:
@@ -61,6 +61,10 @@ jobs:
               if [ -n "$PRECIO" ]; then args+=("$PRECIO"); fi
               python -m pricewatcher.cli "${args[@]}"
               ;;
+            consultar)
+              if [ -z "$URL_O_ID" ]; then echo "Falta el link del producto"; exit 1; fi
+              python -m pricewatcher.cli check "$URL_O_ID"
+              ;;
             dejar_de_seguir)
               if [ -z "$URL_O_ID" ]; then echo "Falta el ID del producto (miralo con 'listar')"; exit 1; fi
               python -m pricewatcher.cli unwatch "$URL_O_ID"
@@ -70,7 +74,7 @@ jobs:
           python -m pricewatcher.cli list
 
       - name: Guardar la base actualizada
-        if: inputs.accion != 'listar'
+        if: inputs.accion == 'seguir' || inputs.accion == 'dejar_de_seguir'
         run: |
           git config user.name "price-watcher-bot"
           git config user.email "actions@users.noreply.github.com"

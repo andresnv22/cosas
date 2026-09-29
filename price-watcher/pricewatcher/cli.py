@@ -4,6 +4,7 @@ a mano, corriendo esto en tu PC.
 
 Uso:
     python -m pricewatcher.cli watch <url> [precio_objetivo]
+    python -m pricewatcher.cli check <url>
     python -m pricewatcher.cli list
     python -m pricewatcher.cli unwatch <id>
     python -m pricewatcher.cli history <id> [archivo_salida.png]
@@ -14,7 +15,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from . import charts, db
+from . import charts, db, money
 from .scrapers import ScraperError, find_scraper_for, store_names
 
 
@@ -39,9 +40,32 @@ def cmd_watch(args: argparse.Namespace) -> int:
     db.record_price(product.id, scraped.price, scraped.currency, scraped.in_stock)
 
     print(f"✅ Siguiendo [{product.id}] {scraped.title}")
-    print(f"   Precio actual: ${scraped.price:,.0f} {scraped.currency}")
+    if scraped.in_stock:
+        print(f"   Precio actual: {money.fmt(scraped.price, scraped.currency)} {scraped.currency}")
+    else:
+        print("   Sin stock en este momento — te aviso cuando vuelva")
     if target_price:
-        print(f"   Te avisa cuando llegue a ${target_price:,.0f} o menos")
+        print(f"   Te avisa cuando llegue a {money.fmt(target_price, scraped.currency)} o menos")
+    return 0
+
+
+def cmd_check(args: argparse.Namespace) -> int:
+    """Consulta el precio actual sin guardar nada."""
+    scraper = find_scraper_for(args.url)
+    if scraper is None:
+        print(f"No reconozco esa tienda. Tiendas soportadas: {', '.join(store_names())}")
+        return 1
+    try:
+        scraped = scraper.fetch(args.url)
+    except ScraperError as exc:
+        print(f"No pude leer el precio: {exc}")
+        return 1
+
+    print(scraped.title)
+    if scraped.in_stock:
+        print(f"   Precio actual: {money.fmt(scraped.price, scraped.currency)} {scraped.currency}")
+    else:
+        print("   Sin stock en este momento")
     return 0
 
 
@@ -54,8 +78,12 @@ def cmd_list(args: argparse.Namespace) -> int:
 
     for p in products:
         last = db.last_price(p.id)
-        price_str = f"${last.price:,.0f}" if last else "sin datos aún"
-        target = f" (objetivo: ${p.target_price:,.0f})" if p.target_price else ""
+        currency = last.currency if last else "COP"
+        if last and not last.in_stock:
+            price_str = "sin stock"
+        else:
+            price_str = money.fmt(last.price, currency) if last else "sin datos aún"
+        target = f" (objetivo: {money.fmt(p.target_price, currency)})" if p.target_price else ""
         print(f"[{p.id}] {p.title or p.url}")
         print(f"      {price_str} · {p.store}{target}")
     return 0
@@ -83,7 +111,11 @@ def cmd_history(args: argparse.Namespace) -> int:
         return 1
 
     out_path = args.output or f"precio_{product.id}.png"
-    png = charts.price_history_chart(product)
+    try:
+        png = charts.price_history_chart(product)
+    except ValueError as exc:
+        print(exc)
+        return 1
     with open(out_path, "wb") as f:
         f.write(png)
     print(f"Gráfico guardado en {out_path}")
@@ -98,6 +130,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_watch.add_argument("url")
     p_watch.add_argument("target_price", type=float, nargs="?", default=None)
     p_watch.set_defaults(func=cmd_watch)
+
+    p_check = sub.add_parser("check", help="Consultar el precio actual de un link, sin guardarlo")
+    p_check.add_argument("url")
+    p_check.set_defaults(func=cmd_check)
 
     p_list = sub.add_parser("list", help="Ver qué estás siguiendo")
     p_list.set_defaults(func=cmd_list)

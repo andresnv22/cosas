@@ -1,0 +1,29 @@
+name: Tests
+
+on:
+  push:
+    paths:
+      - "price-watcher/**"
+      - ".github/workflows/tests.yml"
+  pull_request:
+    paths:
+      - "price-watcher/**"
+  workflow_dispatch: {}
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependencias
+        working-directory: price-watcher
+        run: pip install -r requirements.txt pytest
+
+      - name: Correr tests
+        working-directory: price-watcher
+        run: python -m pytest tests/ -v

@@ -2,15 +2,15 @@
 
 Para agregar una tienda nueva: creá `mitienda.py` en esta carpeta con
 `store_name`, `matches(url)` y `fetch(url)`, y agregala a la lista `_MODULES`
-de abajo. Todo lo demás (cron, bot, base de datos) la reconoce solo.
+de abajo. Todo lo demás (cron, CLI, base de datos) la reconoce solo.
 """
 
 from __future__ import annotations
 
-from . import mercadolibre, steam
+from . import amazon, mercadolibre, steam
 from .base import ScrapedPrice, ScraperError
 
-_MODULES = [mercadolibre, steam]
+_MODULES = [amazon, mercadolibre, steam]
 
 
 def find_scraper_for(url: str):

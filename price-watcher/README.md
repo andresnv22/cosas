@@ -1,9 +1,12 @@
 # Vigilante de precios
 
-Sigue productos de MercadoLibre y Steam, guarda el historial de precios, y
-te avisa **por email, solo cuando la baja es real** — no cuando la tienda
-"sube para bajar" (comparamos contra el mínimo de los últimos 90 días, no
-contra el precio de ayer).
+Sigue productos de **Amazon** (.com, .es, .com.mx, …), **MercadoLibre** y
+**Steam**, guarda el historial de precios, y te avisa **por email** cuando:
+
+- la baja es **real** — no cuando la tienda "sube para bajar" (comparamos
+  contra el mínimo de los últimos 90 días, no contra el precio anterior);
+- **cruza tu precio objetivo** (una sola vez, no en cada chequeo);
+- un producto agotado **vuelve a tener stock**.
 
 Vos agregás/sacás productos con un comando en tu PC (`pricewatcher.cli`);
 el chequeo periódico corre solo en **GitHub Actions** cada 6 horas, sin que
@@ -18,7 +21,7 @@ GitHub Actions (cron, cada 6h) ──────────────┤
                                               ▼
                                     checker.py recorre productos
                                               │
-                                   scrapers/{mercadolibre,steam}.py
+                              scrapers/{amazon,mercadolibre,steam}.py
                                               │
                                     analysis.py: ¿esto es baja real?
                                               │
@@ -71,16 +74,19 @@ inalcanzable, etc.) en vez de que te enteres cuando una alerta real no llegue.
 ### 3. Seguir un producto
 
 ```bash
-python -m pricewatcher.cli watch https://articulo.mercadolibre.com.co/MCO-123456-algo
-python -m pricewatcher.cli watch https://store.steampowered.com/app/570/Dota_2/ 50000
+python -m pricewatcher.cli watch "https://www.amazon.com/dp/B09B8V1LZ3" 35
+python -m pricewatcher.cli watch "https://articulo.mercadolibre.com.co/MCO-123456-algo"
+python -m pricewatcher.cli watch "https://store.steampowered.com/app/570/Dota_2/" 50000
 ```
 
-El segundo ejemplo tiene precio objetivo: avisa apenas llegue a $50.000,
-sin importar el umbral de baja general.
+Poné el link **entre comillas** (en zsh/bash un `?` o `&` del link rompe el
+comando si no). El número del final es opcional: precio objetivo — avisa
+una vez cuando lo cruza, sin importar el umbral de baja general.
 
 Otros comandos:
 
 ```bash
+python -m pricewatcher.cli check "<url>"      # ver el precio ahora, sin guardarlo
 python -m pricewatcher.cli list              # ver qué estás siguiendo
 python -m pricewatcher.cli history <id>       # guarda el gráfico como PNG
 python -m pricewatcher.cli unwatch <id>       # dejar de seguir
@@ -93,8 +99,9 @@ python -m pricewatcher.cli unwatch <id>       # dejar de seguir
 
 El workflow **"Seguir producto"** (`.github/workflows/manage-products.yml`)
 hace lo mismo que el CLI pero corre en GitHub: pestaña **Actions → Seguir
-producto → Run workflow**, elegís la acción (`seguir` / `dejar_de_seguir` /
-`listar`), pegás el link o el ID, y opcionalmente el precio objetivo.
+producto → Run workflow**, elegís la acción (`seguir` / `consultar` /
+`dejar_de_seguir` / `listar`), pegás el link o el ID, y opcionalmente el
+precio objetivo. `consultar` solo muestra el precio actual, sin guardar nada.
 Funciona igual desde la app de GitHub en el celular, y también se puede
 disparar por API — así es como Claude lo maneja cuando le pedís "seguí este
 artículo". Commitea la base actualizada solo, y nunca corre a la vez que el
@@ -136,9 +143,11 @@ pip install pytest
 pytest tests/ -v
 ```
 
-14 tests, ninguno pega a internet: parsing de URLs de cada tienda, la
-lógica de "¿esta baja es un descuento real o maquillaje?", y el armado del
-mail (asunto/cuerpo, múltiples destinatarios) con datos simulados.
+Ninguno pega a internet: parsing de URLs y precios de cada tienda (el HTML
+de Amazon se reproduce recortado de la página real), la lógica de "¿esta
+baja es real o maquillaje?", precio objetivo, vuelta de stock, y el armado
+del mail. También corren solos en GitHub en cada push que toque
+`price-watcher/` (`.github/workflows/tests.yml`).
 
 ## Estructura
 
@@ -149,13 +158,15 @@ price-watcher/
 │   ├── db.py            # SQLite: productos + historial de precios
 │   ├── scrapers/
 │   │   ├── base.py      # contrato común (matches/fetch)
+│   │   ├── amazon.py    # HTML + detección de captcha
 │   │   ├── mercadolibre.py
 │   │   └── steam.py
 │   ├── analysis.py      # ¿vale la pena avisar? (detección de descuento falso)
+│   ├── money.py         # formato de precios por moneda (US$39.99, $26,000)
 │   ├── charts.py         # gráfico de precio con matplotlib
 │   ├── notify.py         # envío por email (SMTP, sin dependencias nuevas)
 │   ├── checker.py        # recorre todos los productos (lo llama el cron)
-│   └── cli.py              # watch / list / unwatch / history, para uso local
+│   └── cli.py              # watch / check / list / unwatch / history
 ├── scripts/
 │   ├── run_check.py       # entrypoint del cron
 │   └── verify_setup.py    # valida el .env contra el servidor SMTP real
@@ -167,12 +178,23 @@ price-watcher/
 - **Rappi y sitios con anti-bot fuerte no están soportados.** Requieren
   sesión, geolocalización y tienen protecciones que no vale la pena pelear
   para un uso personal.
-- Los scrapers de HTML (si agregás una tienda sin API pública) se rompen
-  cuando la tienda cambia su página. Los de MercadoLibre y Steam usan APIs
-  públicas estables, así que son los más confiables.
+- **Amazon es el más frágil de los tres.** No tiene API pública de precios,
+  así que se lee el HTML de la página, y Amazon a veces responde con un
+  captcha anti-bot. Se detecta y se reintenta 3 veces; si sigue, ese chequeo
+  falla con un error claro (no guarda un precio basura) y el siguiente lo
+  vuelve a intentar. Si Amazon cambia el diseño de la página, hay que
+  ajustar los selectores en `scrapers/amazon.py`. El precio que se toma es
+  el de la caja de compra — **no** el precio "de lista" tachado.
+- Amazon muestra precios según desde dónde lo mirás: el chequeo corre en
+  servidores de GitHub (EE.UU.), así que el precio puede no incluir envío ni
+  impuestos de importación a Colombia.
+- Productos de Amazon con variantes (talla/color) o vendidos solo por
+  terceros a veces no muestran precio en la página principal: en ese caso
+  el error lo dice, y conviene pegar el link de la variante exacta.
+- Los de MercadoLibre y Steam usan APIs públicas estables, así que son los
+  más confiables.
 - La detección de "descuento falso" necesita historial: recién es útil
   después de que el producto lleva algunas semanas siendo chequeado.
-- Sin comandos remotos: como las alertas van por email (no hay chat que
-  conteste), agregar/sacar productos se hace corriendo el CLI en tu PC, no
-  desde el celular. Si más adelante querés eso, un bot de Discord con
-  comandos es la forma más simple de sumarlo sin tocar el resto del sistema.
+- El mail solo avisa, no recibe comandos: para agregar/sacar productos se
+  usa el CLI o el workflow "Seguir producto" (que sí anda desde el celular,
+  con la app de GitHub).
