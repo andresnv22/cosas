@@ -7,6 +7,12 @@ on:
     - cron: "0 */6 * * *"
   workflow_dispatch: {}   # para poder disparlo a mano desde la pestaña Actions
 
+# Mismo grupo que "Seguir producto": nunca corren a la vez, así no se pisan
+# al commitear la misma base de datos.
+concurrency:
+  group: pricewatcher-db
+  cancel-in-progress: false
+
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -41,4 +47,5 @@ jobs:
           git config user.email "actions@users.noreply.github.com"
           git add price-watcher/data/pricewatcher.db
           git diff --staged --quiet || git commit -m "chore: actualizar historial de precios [skip ci]"
+          git pull --rebase
           git push

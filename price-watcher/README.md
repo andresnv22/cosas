@@ -89,6 +89,17 @@ python -m pricewatcher.cli unwatch <id>       # dejar de seguir
 (O con `make`: `make watch URL=<url>`, `make list-products` — ver el
 `Makefile` en la raíz.)
 
+### Sin terminal: desde GitHub (o el celular)
+
+El workflow **"Seguir producto"** (`.github/workflows/manage-products.yml`)
+hace lo mismo que el CLI pero corre en GitHub: pestaña **Actions → Seguir
+producto → Run workflow**, elegís la acción (`seguir` / `dejar_de_seguir` /
+`listar`), pegás el link o el ID, y opcionalmente el precio objetivo.
+Funciona igual desde la app de GitHub en el celular, y también se puede
+disparar por API — así es como Claude lo maneja cuando le pedís "seguí este
+artículo". Commitea la base actualizada solo, y nunca corre a la vez que el
+chequeo periódico (comparten grupo de concurrencia), así que no se pisan.
+
 ## Chequeo automático con GitHub Actions (gratis, sin servidor)
 
 El workflow ya está en `.github/workflows/check-prices.yml`, corre cada 6

@@ -1,0 +1,80 @@
+name: Seguir producto
+
+# Agregar / sacar / listar productos sin tocar una terminal: se dispara a
+# mano desde la pestaña Actions (o desde la app de GitHub en el celular),
+# o por API. Corre en los runners de GitHub, que tienen salida a internet
+# normal, y commitea la base actualizada.
+on:
+  workflow_dispatch:
+    inputs:
+      accion:
+        description: "Qué hacer"
+        type: choice
+        options: [seguir, dejar_de_seguir, listar]
+        default: seguir
+      url_o_id:
+        description: "Link del producto (para seguir) o su ID (para dejar de seguir)"
+        required: false
+        default: ""
+      precio_objetivo:
+        description: "Opcional: avisar apenas llegue a este precio o menos"
+        required: false
+        default: ""
+
+# Mismo grupo que el chequeo periódico: nunca corren a la vez, así no se
+# pisan al commitear la misma base de datos.
+concurrency:
+  group: pricewatcher-db
+  cancel-in-progress: false
+
+jobs:
+  manage:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependencias
+        working-directory: price-watcher
+        run: pip install -r requirements.txt
+
+      - name: Ejecutar
+        working-directory: price-watcher
+        env:
+          PRICEWATCHER_DB: data/pricewatcher.db
+          ACCION: ${{ inputs.accion }}
+          URL_O_ID: ${{ inputs.url_o_id }}
+          PRECIO: ${{ inputs.precio_objetivo }}
+        # Los inputs van por variables de entorno, nunca interpolados
+        # directo en el script: un link con comillas o `$(...)` no puede
+        # inyectar comandos.
+        run: |
+          case "$ACCION" in
+            seguir)
+              if [ -z "$URL_O_ID" ]; then echo "Falta el link del producto"; exit 1; fi
+              args=(watch "$URL_O_ID")
+              if [ -n "$PRECIO" ]; then args+=("$PRECIO"); fi
+              python -m pricewatcher.cli "${args[@]}"
+              ;;
+            dejar_de_seguir)
+              if [ -z "$URL_O_ID" ]; then echo "Falta el ID del producto (miralo con 'listar')"; exit 1; fi
+              python -m pricewatcher.cli unwatch "$URL_O_ID"
+              ;;
+          esac
+          echo "----- Productos seguidos -----"
+          python -m pricewatcher.cli list
+
+      - name: Guardar la base actualizada
+        if: inputs.accion != 'listar'
+        run: |
+          git config user.name "price-watcher-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add price-watcher/data/pricewatcher.db
+          git diff --staged --quiet || git commit -m "chore: ${{ inputs.accion }} producto [skip ci]"
+          git pull --rebase
+          git push

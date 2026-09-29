@@ -100,7 +100,7 @@ def add_product(
             """
             INSERT INTO products (url, store, title, target_price, created_at)
             VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT(url) DO UPDATE SET active = 1
+            ON CONFLICT(url) DO UPDATE SET active = 1, target_price = excluded.target_price
             """,
             (url, store, title, target_price, datetime.utcnow().isoformat()),
         )

@@ -36,6 +36,20 @@ def test_unwatch_without_chat_id(tmp_path):
     assert db.list_products(db_path=db_path) == []
 
 
+def test_rewatch_updates_target_price(tmp_path):
+    """Volver a seguir un producto con otro precio objetivo tiene que
+    actualizarlo, no ignorarlo."""
+    db_path = tmp_path / "test.db"
+    db.init_db(db_path)
+    url = "https://store.steampowered.com/app/99/x"
+
+    db.add_product(url=url, store="steam", target_price=50000, db_path=db_path)
+    product = db.add_product(url=url, store="steam", target_price=30000, db_path=db_path)
+
+    assert product.target_price == 30000
+    assert len(db.list_products(db_path=db_path)) == 1
+
+
 def test_recipients_parses_comma_separated(monkeypatch):
     monkeypatch.setattr(config, "EMAIL_TO", "a@x.com, b@y.com ,c@z.com")
     assert notify._recipients() == ["a@x.com", "b@y.com", "c@z.com"]
