@@ -61,3 +61,19 @@ MIN_DROP_PERCENT = float(_env("MIN_DROP_PERCENT", "3"))
 
 # Cuántos días de historial mirar para decidir si un "descuento" es real
 FAKE_DISCOUNT_WINDOW_DAYS = int(_env("FAKE_DISCOUNT_WINDOW_DAYS", "90"))
+
+
+def _store_list(name: str) -> set[str]:
+    return {s.strip().lower() for s in _env(name, "").split(",") if s.strip()}
+
+
+# Qué tiendas chequea ESTA máquina. Amazon bloquea las IPs de datacenter de
+# GitHub Actions (captcha), así que GitHub corre con SKIP_STORES=amazon y la
+# Mac del usuario con ONLY_STORES=amazon. Vacío = todas.
+ONLY_STORES = _store_list("ONLY_STORES")
+SKIP_STORES = _store_list("SKIP_STORES")
+
+# Tiendas cuyos productos se agregan SIN consultar el precio en el momento
+# (lo lee después otra máquina). Lo usa el workflow "Seguir producto" con
+# amazon, porque desde GitHub Amazon devuelve captcha.
+DEFER_STORES = _store_list("DEFER_STORES")

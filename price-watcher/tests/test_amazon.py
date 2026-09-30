@@ -239,3 +239,56 @@ def test_target_hit_has_its_own_subject(tmp_path):
     subject, _ = checker._format_alert(product, verdict, "USD")
 
     assert "precio objetivo" in subject
+
+
+def test_select_products_by_store():
+    from pricewatcher import checker
+
+    products = [
+        db.Product(1, "u1", "amazon", None, None, True, ""),
+        db.Product(2, "u2", "steam", None, None, True, ""),
+        db.Product(3, "u3", "mercadolibre", None, None, True, ""),
+    ]
+    assert [p.id for p in checker.select_products(products, set(), set())] == [1, 2, 3]
+    assert [p.id for p in checker.select_products(products, {"amazon"}, set())] == [1]      # la Mac
+    assert [p.id for p in checker.select_products(products, set(), {"amazon"})] == [2, 3]   # GitHub
+
+
+@pytest.mark.parametrize(
+    "url,expected",
+    [
+        ("https://www.amazon.com/Echo-Dot/dp/B09B8V1LZ3/ref=sr_1_3?crid=X", "https://www.amazon.com/dp/B09B8V1LZ3"),
+        ("https://www.amazon.com.mx/gp/product/B07ZPKBL9V?th=1", "https://www.amazon.com.mx/dp/B07ZPKBL9V"),
+        ("https://amzn.to/3abcDEF", "https://amzn.to/3abcDEF"),  # link corto: no se puede sin internet
+    ],
+)
+def test_canonical_url(url, expected):
+    assert amazon.canonical_url(url) == expected
+
+
+def test_deferred_watch_saves_without_fetching(tmp_path, monkeypatch):
+    """Desde GitHub, Amazon da captcha: 'seguir' tiene que guardar el producto
+    sin pegarle a Amazon, y sin duplicarlo si llega con otro tracking."""
+    from pricewatcher import cli, config
+
+    db_path = tmp_path / "test.db"
+    monkeypatch.setattr(config, "DB_PATH", db_path)
+    monkeypatch.setattr(config, "DEFER_STORES", {"amazon"})
+
+    def boom(url):
+        raise AssertionError("no debería pegarle a Amazon")
+
+    monkeypatch.setattr(amazon, "fetch", boom)
+
+    parser = cli.build_parser()
+    for argv in (
+        ["watch", "https://www.amazon.com/Echo/dp/B09B8V1LZ3/ref=x?y=1", "35"],
+        ["watch", "https://www.amazon.com/dp/B09B8V1LZ3?tag=otro"],
+    ):
+        args = parser.parse_args(argv)
+        assert args.func(args) == 0
+
+    products = db.list_products(db_path=db_path)
+    assert len(products) == 1
+    assert products[0].url == "https://www.amazon.com/dp/B09B8V1LZ3"
+    assert db.price_history(products[0].id, db_path=db_path) == []

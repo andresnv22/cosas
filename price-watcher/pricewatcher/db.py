@@ -184,6 +184,52 @@ def last_price(product_id: int, db_path: Path | None = None) -> Optional[PricePo
         return PricePoint(price=row["price"], currency=row["currency"], checked_at=row["checked_at"], in_stock=bool(row["in_stock"]))
 
 
+@dataclass
+class HistoryRow:
+    product_id: int
+    price: float
+    currency: str
+    checked_at: str
+    in_stock: bool
+
+
+def max_history_id(db_path: Path | None = None) -> int:
+    with connect(db_path) as conn:
+        row = conn.execute("SELECT COALESCE(MAX(id), 0) AS m FROM price_history").fetchone()
+        return row["m"]
+
+
+def history_rows_since(after_id: int, db_path: Path | None = None) -> list[HistoryRow]:
+    """Registros de precio agregados después de `after_id` — lo que esta
+    corrida sumó, para poder re-aplicarlo sobre otra versión de la base."""
+    with connect(db_path) as conn:
+        rows = conn.execute(
+            "SELECT product_id, price, currency, checked_at, in_stock FROM price_history WHERE id > ? ORDER BY id",
+            (after_id,),
+        ).fetchall()
+        return [
+            HistoryRow(r["product_id"], r["price"], r["currency"], r["checked_at"], bool(r["in_stock"]))
+            for r in rows
+        ]
+
+
+def insert_history_rows(rows: list[HistoryRow], db_path: Path | None = None) -> int:
+    """Re-aplica registros sobre otra versión de la base (ids nuevos, misma
+    fecha original). Saltea productos que no existan en esta versión."""
+    inserted = 0
+    with connect(db_path) as conn:
+        existing = {r["id"] for r in conn.execute("SELECT id FROM products").fetchall()}
+        for row in rows:
+            if row.product_id not in existing:
+                continue
+            conn.execute(
+                "INSERT INTO price_history (product_id, price, currency, checked_at, in_stock) VALUES (?, ?, ?, ?, ?)",
+                (row.product_id, row.price, row.currency, row.checked_at, int(row.in_stock)),
+            )
+            inserted += 1
+    return inserted
+
+
 def min_price(product_id: int, days: int, db_path: Path | None = None) -> Optional[float]:
     with connect(db_path) as conn:
         row = conn.execute(

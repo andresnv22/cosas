@@ -2,8 +2,8 @@ name: Seguir producto
 
 # Agregar / sacar / listar productos sin tocar una terminal: se dispara a
 # mano desde la pestaña Actions (o desde la app de GitHub en el celular),
-# o por API. Corre en los runners de GitHub, que tienen salida a internet
-# normal, y commitea la base actualizada.
+# o por API. Corre en los runners de GitHub. `watch`/`unwatch` suben la base
+# solos (pricewatcher/gitsync.py), resolviendo choques con la Mac.
 on:
   workflow_dispatch:
     inputs:
@@ -43,10 +43,17 @@ jobs:
         working-directory: price-watcher
         run: pip install -r requirements.txt
 
+      - name: Identidad de git para commitear la base
+        run: |
+          git config user.name "price-watcher-bot"
+          git config user.email "actions@users.noreply.github.com"
+
       - name: Ejecutar
         working-directory: price-watcher
         env:
           PRICEWATCHER_DB: data/pricewatcher.db
+          # Amazon da captcha desde GitHub: se guarda sin precio y lo lee la Mac.
+          DEFER_STORES: amazon
           ACCION: ${{ inputs.accion }}
           URL_O_ID: ${{ inputs.url_o_id }}
           PRECIO: ${{ inputs.precio_objetivo }}
@@ -72,13 +79,3 @@ jobs:
           esac
           echo "----- Productos seguidos -----"
           python -m pricewatcher.cli list
-
-      - name: Guardar la base actualizada
-        if: inputs.accion == 'seguir' || inputs.accion == 'dejar_de_seguir'
-        run: |
-          git config user.name "price-watcher-bot"
-          git config user.email "actions@users.noreply.github.com"
-          git add price-watcher/data/pricewatcher.db
-          git diff --staged --quiet || git commit -m "chore: ${{ inputs.accion }} producto [skip ci]"
-          git pull --rebase
-          git push

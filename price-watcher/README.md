@@ -107,6 +107,37 @@ disparar por API — así es como Claude lo maneja cuando le pedís "seguí este
 artículo". Commitea la base actualizada solo, y nunca corre a la vez que el
 chequeo periódico (comparten grupo de concurrencia), así que no se pisan.
 
+## Amazon: se chequea desde tu Mac
+
+Amazon bloquea las IPs de los servidores de GitHub (devuelve captcha), así
+que el reparto es:
+
+| Dónde | Qué chequea | Cuándo |
+|---|---|---|
+| GitHub Actions | MercadoLibre, Steam | cada 6 h, siempre |
+| Tu Mac | Amazon | 00:17, 06:17, 12:17, 18:17 — si estaba dormida, apenas se despierta |
+
+Instalación (una vez, con el `.env` ya configurado y habiendo hecho algún
+`git push` a mano, para que la contraseña quede en el llavero):
+
+```bash
+bash price-watcher/scripts/mac/install.sh
+```
+
+Verifica todo antes de instalar (dependencias, mail, que git pueda subir
+sin pedir contraseña) y te dice qué falta si algo no está. Log:
+`tail -f ~/Library/Logs/pricewatcher-amazon.log`. Desinstalar:
+`bash price-watcher/scripts/mac/uninstall.sh`.
+
+Las dos máquinas escriben la misma base en el repo. Si suben casi a la vez,
+`pricewatcher/gitsync.py` trae la versión más nueva y re-aplica encima sus
+registros nuevos — no se pierde nada y no se repiten alertas (testeado con
+repos git reales en `tests/test_gitsync.py`). Nunca toca otros archivos: si
+tenés cambios sin commitear en la Mac, quedan intactos.
+
+Agregar un producto de Amazon desde GitHub (o pidiéndoselo a Claude) lo
+guarda sin precio; tu Mac lo lee en su próximo chequeo.
+
 ## Chequeo automático con GitHub Actions (gratis, sin servidor)
 
 El workflow ya está en `.github/workflows/check-prices.yml`, corre cada 6
@@ -131,10 +162,9 @@ nada sensible, pero tenelo en cuenta). Si te importa, poné el repo en
 privado o cambiá el workflow para guardar la base en otro lado (un gist
 privado, un bucket S3 gratis, etc.).
 
-Para agregar/sacar productos que sigue el chequeo automático, corré el CLI
-localmente (apunta a la misma base que después se sube al repo) y pusheá el
-cambio — o simplemente corré el CLI en tu PC con `PRICEWATCHER_DB` apuntando
-a una copia del `data/pricewatcher.db` que bajaste del repo.
+`watch` y `unwatch` suben el cambio al repo solos cuando la base está dentro
+de un clon con remoto (tu Mac, GitHub). Con `--no-sync` solo cambian el
+archivo local.
 
 ## Correr los tests
 
@@ -166,10 +196,12 @@ price-watcher/
 │   ├── charts.py         # gráfico de precio con matplotlib
 │   ├── notify.py         # envío por email (SMTP, sin dependencias nuevas)
 │   ├── checker.py        # recorre todos los productos (lo llama el cron)
+│   ├── gitsync.py        # sube la base al repo resolviendo choques entre máquinas
 │   └── cli.py              # watch / check / list / unwatch / history
 ├── scripts/
-│   ├── run_check.py       # entrypoint del cron
-│   └── verify_setup.py    # valida el .env contra el servidor SMTP real
+│   ├── run_check.py       # entrypoint del chequeo (--git-sync para subir la base)
+│   ├── verify_setup.py    # valida el .env contra el servidor SMTP real
+│   └── mac/               # install.sh / uninstall.sh de la tarea de Amazon
 └── tests/
 ```
 
@@ -185,9 +217,12 @@ price-watcher/
   vuelve a intentar. Si Amazon cambia el diseño de la página, hay que
   ajustar los selectores en `scrapers/amazon.py`. El precio que se toma es
   el de la caja de compra — **no** el precio "de lista" tachado.
-- Amazon muestra precios según desde dónde lo mirás: el chequeo corre en
-  servidores de GitHub (EE.UU.), así que el precio puede no incluir envío ni
-  impuestos de importación a Colombia.
+- El captcha de Amazon también aparece a veces desde conexiones normales
+  (en una prueba salió dos veces y a la tercera respondió). Por eso los 3
+  reintentos. Si una corrida entera falla, la siguiente lo vuelve a intentar.
+- Amazon muestra precios según desde dónde lo mirás; el precio no incluye
+  envío ni impuestos de importación a Colombia.
+- Si la Mac está apagada varios días, Amazon no se chequea esos días.
 - Productos de Amazon con variantes (talla/color) o vendidos solo por
   terceros a veces no muestran precio en la página principal: en ese caso
   el error lo dice, y conviene pegar el link de la variante exacta.

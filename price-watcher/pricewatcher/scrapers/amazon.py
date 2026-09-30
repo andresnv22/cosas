@@ -89,6 +89,18 @@ def extract_asin(url: str) -> str | None:
     return match.group(1).upper() if match else None
 
 
+def canonical_url(url: str) -> str:
+    """'https://www.amazon.com/Echo/dp/B09B8V1LZ3/ref=sr_1?crid=..' ->
+    'https://www.amazon.com/dp/B09B8V1LZ3'. Así el mismo producto pegado con
+    distinto tracking no se guarda dos veces. Links cortos (amzn.to) quedan
+    igual: resolverlos necesita pegarle a internet."""
+    host = (urlparse(url).hostname or "").lower()
+    asin = extract_asin(url)
+    if not asin or host in _SHORT_HOSTS:
+        return url
+    return f"https://{host}/dp/{asin}"
+
+
 def parse_price(text: str) -> float | None:
     """Convierte 'US$1,249.00', '1.249,00 €', '$ 39.99', 'R$ 1.299,90' en float.
 

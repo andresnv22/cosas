@@ -7,8 +7,8 @@ on:
     - cron: "0 */6 * * *"
   workflow_dispatch: {}   # para poder disparlo a mano desde la pestaña Actions
 
-# Mismo grupo que "Seguir producto": nunca corren a la vez, así no se pisan
-# al commitear la misma base de datos.
+# Mismo grupo que "Seguir producto": nunca corren a la vez entre ellos. Los
+# choques con la Mac (que chequea Amazon) los resuelve --git-sync.
 concurrency:
   group: pricewatcher-db
   cancel-in-progress: false
@@ -29,7 +29,12 @@ jobs:
         working-directory: price-watcher
         run: pip install -r requirements.txt
 
-      - name: Correr el chequeo
+      - name: Identidad de git para commitear la base
+        run: |
+          git config user.name "price-watcher-bot"
+          git config user.email "actions@users.noreply.github.com"
+
+      - name: Chequear y subir la base
         working-directory: price-watcher
         env:
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
@@ -39,13 +44,6 @@ jobs:
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           EMAIL_TO: ${{ secrets.EMAIL_TO }}
           PRICEWATCHER_DB: data/pricewatcher.db
-        run: python scripts/run_check.py
-
-      - name: Guardar el historial actualizado
-        run: |
-          git config user.name "price-watcher-bot"
-          git config user.email "actions@users.noreply.github.com"
-          git add price-watcher/data/pricewatcher.db
-          git diff --staged --quiet || git commit -m "chore: actualizar historial de precios [skip ci]"
-          git pull --rebase
-          git push
+          # Amazon bloquea las IPs de GitHub (captcha): lo chequea la Mac.
+          SKIP_STORES: amazon
+        run: python scripts/run_check.py --git-sync

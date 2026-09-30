@@ -4,10 +4,12 @@ on:
   push:
     paths:
       - "price-watcher/**"
+      - "!price-watcher/data/**"   # los commits de la base no son código
       - ".github/workflows/tests.yml"
   pull_request:
     paths:
       - "price-watcher/**"
+      - "!price-watcher/data/**"
   workflow_dispatch: {}
 
 jobs:

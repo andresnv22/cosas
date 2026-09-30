@@ -15,8 +15,19 @@ from __future__ import annotations
 import argparse
 import sys
 
-from . import charts, db, money
+from . import charts, config, db, gitsync, money
 from .scrapers import ScraperError, find_scraper_for, store_names
+
+
+def _apply(args: argparse.Namespace, change, message: str):
+    """Aplica un cambio a la base. Si la base vive en un repo git con remoto
+    (tu Mac, GitHub Actions), además lo sube — así nunca queda la base con
+    cambios sin subir que después choquen con el chequeo automático."""
+    if not (args.sync and gitsync.syncable(config.DB_PATH)):
+        return change()
+    results = []
+    gitsync.mutate_and_push(lambda: results.append(change()), config.DB_PATH, message)
+    return results[-1]
 
 
 def cmd_watch(args: argparse.Namespace) -> int:
@@ -28,16 +39,43 @@ def cmd_watch(args: argparse.Namespace) -> int:
         print(f"No reconozco esa tienda. Tiendas soportadas: {', '.join(store_names())}")
         return 1
 
-    print("Consultando el precio actual...")
+    if hasattr(scraper, "canonical_url"):
+        url = scraper.canonical_url(url)
+
+    # Esta máquina puede no poder leer esa tienda (Amazon desde GitHub =
+    # captcha): en ese caso se guarda el producto sin precio y lo lee la
+    # máquina que sí puede, en su próximo chequeo.
+    deferred = scraper.store_name in config.DEFER_STORES
+    scraped = None
+    if not deferred:
+        print("Consultando el precio actual...")
+        try:
+            scraped = scraper.fetch(url)
+        except ScraperError as exc:
+            print(f"No pude leer el precio: {exc}")
+            return 1
+
+    def change():
+        db.init_db()
+        product = db.add_product(
+            url=url, store=scraper.store_name, title=scraped.title if scraped else None, target_price=target_price
+        )
+        if scraped:
+            db.record_price(product.id, scraped.price, scraped.currency, scraped.in_stock)
+        return product
+
     try:
-        scraped = scraper.fetch(url)
-    except ScraperError as exc:
-        print(f"No pude leer el precio: {exc}")
+        product = _apply(args, change, f"chore: seguir producto de {scraper.store_name} [skip ci]")
+    except gitsync.GitSyncError as exc:
+        print(f"Se guardó localmente pero no pude subirlo: {exc}")
         return 1
 
-    db.init_db()
-    product = db.add_product(url=url, store=scraper.store_name, title=scraped.title, target_price=target_price)
-    db.record_price(product.id, scraped.price, scraped.currency, scraped.in_stock)
+    if deferred:
+        print(f"✅ Siguiendo [{product.id}] {url}")
+        print(f"   El precio de {scraper.store_name} se lee en el próximo chequeo desde tu Mac.")
+        if target_price:
+            print(f"   Precio objetivo: {target_price:,.2f}")
+        return 0
 
     print(f"✅ Siguiendo [{product.id}] {scraped.title}")
     if scraped.in_stock:
@@ -78,11 +116,11 @@ def cmd_list(args: argparse.Namespace) -> int:
 
     for p in products:
         last = db.last_price(p.id)
-        currency = last.currency if last else "COP"
+        currency = last.currency if last else ("USD" if p.store == "amazon" else "COP")
         if last and not last.in_stock:
             price_str = "sin stock"
         else:
-            price_str = money.fmt(last.price, currency) if last else "sin datos aún"
+            price_str = money.fmt(last.price, currency) if last else "sin precio todavía (se lee en el próximo chequeo)"
         target = f" (objetivo: {money.fmt(p.target_price, currency)})" if p.target_price else ""
         print(f"[{p.id}] {p.title or p.url}")
         print(f"      {price_str} · {p.store}{target}")
@@ -90,8 +128,17 @@ def cmd_list(args: argparse.Namespace) -> int:
 
 
 def cmd_unwatch(args: argparse.Namespace) -> int:
-    db.init_db()
-    if db.deactivate_product(args.id):
+    def change():
+        db.init_db()
+        return db.deactivate_product(args.id)
+
+    try:
+        found = _apply(args, change, f"chore: dejar de seguir producto {args.id} [skip ci]")
+    except gitsync.GitSyncError as exc:
+        print(f"Se guardó localmente pero no pude subirlo: {exc}")
+        return 1
+
+    if found:
         print(f"❌ Dejé de seguir el producto {args.id}")
         return 0
     print(f"No encontré el producto {args.id}")
@@ -129,6 +176,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_watch = sub.add_parser("watch", help="Seguir un producto nuevo")
     p_watch.add_argument("url")
     p_watch.add_argument("target_price", type=float, nargs="?", default=None)
+    p_watch.add_argument("--no-sync", dest="sync", action="store_false", help="No subir el cambio al repo")
     p_watch.set_defaults(func=cmd_watch)
 
     p_check = sub.add_parser("check", help="Consultar el precio actual de un link, sin guardarlo")
@@ -140,6 +188,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_unwatch = sub.add_parser("unwatch", help="Dejar de seguir un producto")
     p_unwatch.add_argument("id", type=int)
+    p_unwatch.add_argument("--no-sync", dest="sync", action="store_false", help="No subir el cambio al repo")
     p_unwatch.set_defaults(func=cmd_unwatch)
 
     p_history = sub.add_parser("history", help="Guardar el gráfico de precio como PNG")

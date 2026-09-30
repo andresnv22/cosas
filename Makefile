@@ -1,7 +1,7 @@
 # Atajos para no tener que acordarte de los comandos largos.
 # `make help` lista todo.
 
-.PHONY: help setup-price-watcher setup-wall-panel verify-price-watcher verify-wall-panel watch list-products test test-firmware up down logs
+.PHONY: help setup-price-watcher setup-wall-panel verify-price-watcher verify-wall-panel watch list-products mac-install mac-uninstall test test-firmware up down logs
 
 help:
 	@echo "make setup-price-watcher    - venv + deps + copia .env.example -> .env"
@@ -9,6 +9,8 @@ help:
 	@echo "make verify-price-watcher   - valida tu .env (SMTP) contra el servidor real, manda mail de prueba"
 	@echo "make watch URL=<url>        - agrega un producto a seguir"
 	@echo "make list-products          - lista lo que estás siguiendo"
+	@echo "make mac-install            - instala en tu Mac la tarea que chequea Amazon"
+	@echo "make mac-uninstall          - la saca"
 	@echo "make verify-wall-panel      - valida tu .env (calendario/clima) contra las APIs reales"
 	@echo "make test                   - corre los tests de price-watcher"
 	@echo "make test-firmware          - compila el firmware del ESP32 (requiere PlatformIO)"
@@ -32,10 +34,16 @@ verify-price-watcher:
 	cd price-watcher && .venv/bin/python scripts/verify_setup.py
 
 watch:
-	cd price-watcher && .venv/bin/python -m pricewatcher.cli watch $(URL) $(TARGET)
+	cd price-watcher && .venv/bin/python -m pricewatcher.cli watch "$(URL)" $(TARGET)
 
 list-products:
 	cd price-watcher && .venv/bin/python -m pricewatcher.cli list
+
+mac-install:
+	bash price-watcher/scripts/mac/install.sh
+
+mac-uninstall:
+	bash price-watcher/scripts/mac/uninstall.sh
 
 verify-wall-panel:
 	wall-panel/server/.venv/bin/python wall-panel/server/verify_setup.py

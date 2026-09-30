@@ -10,7 +10,7 @@ import logging
 import time
 from dataclasses import dataclass
 
-from . import analysis, charts, db, money, notify
+from . import analysis, charts, config, db, money, notify
 from .scrapers import ScraperError, find_scraper_for
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -113,12 +113,24 @@ def check_product(product: db.Product) -> CheckResult:
     return CheckResult(product.id, ok=True, alerted=alerted, detail=verdict.reason)
 
 
+def select_products(products: list[db.Product], only: set[str], skip: set[str]) -> list[db.Product]:
+    """Filtra por tienda según ONLY_STORES / SKIP_STORES de esta máquina."""
+    return [p for p in products if (not only or p.store in only) and p.store not in skip]
+
+
 def run_all(sleep_between: float = 2.0) -> list[CheckResult]:
     """Chequea todos los productos activos. `sleep_between` evita mandar
     requests en ráfaga a la misma tienda (buena práctica, no molesta a nadie)."""
     db.init_db()
-    products = db.list_products(active_only=True)
-    log.info("Chequeando %d productos activos", len(products))
+    all_products = db.list_products(active_only=True)
+    products = select_products(all_products, config.ONLY_STORES, config.SKIP_STORES)
+    log.info(
+        "Chequeando %d de %d productos activos (solo: %s, salteando: %s)",
+        len(products),
+        len(all_products),
+        ",".join(sorted(config.ONLY_STORES)) or "todas",
+        ",".join(sorted(config.SKIP_STORES)) or "ninguna",
+    )
 
     results = []
     for product in products:
